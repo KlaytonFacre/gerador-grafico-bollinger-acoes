@@ -10,6 +10,8 @@ with open(f'./assets/dados/{acao}.txt', 'r') as arquivo_cotacao:
 
 workbook = Workbook()
 planilha_ativa = workbook.active
+
+# PREPARANDO A PLANILHA DE 'DADOS'
 planilha_ativa.title = 'Dados'
 
 planilha_ativa.append(["DATA", "COTAÇÃO", "BANDA INFERIOR", "BANDA SUPERIOR"])
