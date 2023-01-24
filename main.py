@@ -1,28 +1,26 @@
 from datetime import date
 from openpyxl import Workbook
-from openpyxl.styles import *
-from openpyxl.chart import *
-from openpyxl.
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.chart import LineChart, Reference
+from openpyxl.drawing.image import Image
 
+from classes.models import LeitorDeAcoes, GerenciadorPlanilha
 
-# acao = input('Qual o código da ação a ser processada? ').upper()
-# Setando a variável temporariamente apenas para testes e agilizar a execução do programa
-acao = "BIDI4"
+acao = input('Qual o código da ação a ser processada? ').upper()
 
-with open(f'./assets/dados/{acao}.txt', 'r') as arquivo_cotacao:
-    linhas = arquivo_cotacao.readlines()
-    linhas = [linha.removesuffix('\n').split(';') for linha in linhas]
+# Busca o arquivo do Código da Ação informado pelo usuário
+leitor_acoes = LeitorDeAcoes(caminho_arquivo='./assets/dados/')
+leitor_acoes.processa_arquivo(acao)
 
-workbook = Workbook()
-planilha_ativa = workbook.active
+# Cria um Objeto gerenciador de planilhas
+gerenciador = GerenciadorPlanilha()
+planilha_dados = gerenciador.adicionar_planilha("Dados")
 
 # PREPARANDO A PLANILHA DE 'DADOS'
-planilha_ativa.title = 'Dados'
-
-planilha_ativa.append(["DATA", "COTAÇÃO", "BANDA INFERIOR", "BANDA SUPERIOR"])
+gerenciador.adiciona_linha(["DATA", "COTAÇÃO", "BANDA INFERIOR", "BANDA SUPERIOR"])
 
 indice = 2
-for linha in linhas:
+for linha in leitor_acoes.dados:
     # TRATANDO E PREPARANDO A DATA, CRIANDO UM OBJETO DATE DO PYTHON
     ano_mes_dia = linha[0].split(" ")[0]
     data = date(
@@ -31,32 +29,32 @@ for linha in linhas:
         day=int(ano_mes_dia.split("-")[2])
     )
 
-    # TRATANDO E PREPARANDO A COTAÇÃO
+    # TRATANDO E PREPARANDO A COTAÇÃO E AS FÓRMULAS DA BANDA DE BOLLINGER
     cotacao = float(linha[1])
+    formula_bb_inferior = f'=AVERAGE(B{indice}:B{indice + 19}) - 2*STDEV(B{indice}:B{indice + 19})'
+    formula_bb_superior = f'=AVERAGE(B{indice}:B{indice + 19}) + 2*STDEV(B{indice}:B{indice + 19})'
 
     # ESCREVENDO DADOS NA PLANILHA ATIVA
     # Data
-    planilha_ativa[f'A{indice}'] = data
+    gerenciador.atualiza_celula(celula=f'A{indice}', dado=data)
     # Cotação
-    planilha_ativa[f'B{indice}'] = cotacao
+    gerenciador.atualiza_celula(celula=f'B{indice}', dado=cotacao)
     # Banda inferior de Bollinger
-    planilha_ativa[f'C{indice}'] = f'=AVERAGE(B{indice}:B{indice + 19}) - 2*STDEV(B{indice}:B{indice + 19})'
+    gerenciador.atualiza_celula(celula=f'C{indice}', dado=formula_bb_inferior)
     # Banda superior de Bollinger
-    planilha_ativa[f'D{indice}'] = f'=AVERAGE(B{indice}:B{indice + 19}) + 2*STDEV(B{indice}:B{indice + 19})'
+    gerenciador.atualiza_celula(celula=f'D{indice}', dado=formula_bb_superior)
 
     # PREPARA PARA A ESCRITA NA PRÓXIMA LINHA
     indice += 1
 
-planilha_grafico = workbook.create_sheet("Gráfico")
-Workbook.active = planilha_grafico
+planilha_grafico = gerenciador.adicionar_planilha(titulo_planilha="Gráfico")
 
-# Mesclagem de células e criação do cabeçalho do gráfico
-planilha_grafico.merge_cells("A1:T2")
-cabecalho = planilha_grafico["A1"]
-cabecalho.font = Font(b=True, sz=18, color="FFFFFF")
-cabecalho.fill = PatternFill("solid", fgColor="07838f")
-cabecalho.alignment = Alignment(vertical="center", horizontal="center")
-cabecalho.value = "Histórico de Cotações"
+# Mesclagem de células e criação de estilos, preenchimento e definição de alinhamento
+gerenciador.mescla_celulas(celula_inicio="A1", celula_fim="T2")
+gerenciador.estiliza_fonte(celula="A1", fonte=Font(b=True, sz=18, color="FFFFFF"))
+gerenciador.estiliza_preenchimento(celula="A1", preenchimento=PatternFill("solid", fgColor="07838f"))
+gerenciador.estiliza_alinhamento(celula="A1", alinhamento=Alignment(vertical="center", horizontal="center"))
+gerenciador.atualiza_celula(celula="A1", dado="Histórico de Cotações")
 
 # Criação do Gráfico
 grafico = LineChart()
@@ -88,6 +86,11 @@ linha_bb_superior.graphicalProperties.line.solidFill = "ff0000"
 
 # Adicionando de fato o gráfico à planilha
 planilha_grafico.add_chart(grafico, "A3")
+
+# Adicionando uma imagem
+imagem = Image("./assets/recursos/logo.png")
+planilha_grafico.merge_cells("I33:L36")
+planilha_grafico.add_image(imagem, "I33")
 
 # Gerando o arquivo XLSX final
 workbook.save(f'./saida/{acao}.xlsx')
